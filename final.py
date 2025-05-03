@@ -7,7 +7,6 @@ from gymnasium import spaces
 from collections import defaultdict
 import random
 import time
-import pickle
 import os
 from numba import jit, float64, bool_, int64, void
 from networkx.algorithms.shortest_paths.generic import shortest_path, has_path
@@ -286,9 +285,9 @@ class SimplePowerGridEnv(gym.Env):
         self.state_length = len(self.controllable_lines_keys) + len(self._load_zone_nodes)
         self.observation_space = spaces.Box(low=0, high=1, shape=(self.state_length,), dtype=np.int32)
         self.alpha = 0.1
-        self.gamma = 0.99
+        self.gamma = 0.5
         self.epsilon = 1.0
-        self.epsilon_decay = 0.995
+        self.epsilon_decay = 0.9
         self.epsilon_min = 0.01
         self.q_table = None
         self.state_to_index = None
@@ -894,7 +893,7 @@ for step in range(max_steps_per_episode):
 
     # Render the current state
     demo_env.render(step_info=info_str)
-    time.sleep(1.5) # Pause between steps
+    time.sleep(2.5) # Pause between steps
 
     state_tuple = next_state_tuple # Update state for next iteration
 
