@@ -330,6 +330,8 @@ if __name__ == '__main__':
                         help="Maximum number of steps for demonstration mode (default: 50).")
     parser.add_argument('--render_mode', type=str, choices=['human', 'terminal', 'none'], default='human',
                         help="Rendering mode for demonstration: 'human' (dashboard), 'terminal' (step summary), 'none' (no per-step output). Default: 'human'.")
+    parser.add_argument('--render_time', type=float, default=2.5,
+                        help="Time in seconds to pause between steps when render_mode is 'human' (default: 2.5).")
     # Common arguments
     parser.add_argument('--load', action='store_true',
                         help="Load a pre-trained Q-table from --save_file before starting training or demonstration.")
@@ -347,7 +349,7 @@ if __name__ == '__main__':
     env = None # Initialize to None for finally block safety
     try:
         print(f"Initializing PowerGridEnv (render_mode='{render_mode_for_env}')...")
-        env = PowerGridEnv(render_mode=render_mode_for_env)
+        env = PowerGridEnv(render_mode=render_mode_for_env,RENDER_SLEEP_TIME=args.render_time)
         print("Environment initialized.")
     except Exception as e:
         print(f"FATAL: Error initializing environment: {e}")

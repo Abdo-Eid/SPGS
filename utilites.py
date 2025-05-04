@@ -46,7 +46,7 @@ class MainGenerator:
         online (bool): Current status, True if operational, False if failed/healing.
         fail_timer (int): Countdown timer for healing (steps remaining).
     """
-    def __init__(self, name, min_output, max_output, fail_prob_per_hour, heal_time_hours):
+    def __init__(self, name, min_output, max_output, fail_prob_per_hour, heal_time_hours, ramp_rate = 20):
         """
         Initializes a MainGenerator instance.
 
@@ -62,6 +62,8 @@ class MainGenerator:
         self.max_output = max_output # MW
         self.fail_prob_per_step = fail_prob_per_hour # Assumes 1 step = 1 hour
         self.heal_time_steps = heal_time_hours # Assumes 1 step = 1 hour
+        self.ramp_rate = ramp_rate # Example: Can change output by 20 MW per step (assuming 1 hour steps)
+        self._current_actual_output = 0.0 # Track actual output
 
         self.online = True # Starts online
         self.fail_timer = 0 # Starts with no failure pending
@@ -102,6 +104,40 @@ class MainGenerator:
         """
         return [float(self.online), self.fail_timer, self.min_output, self.max_output]
 
+    def set_desired_output(self, desired_output):
+         """Sets the target output for this step (system's need)."""
+         self._desired_output = np.clip(desired_output, self.min_output, self.max_output)
+         # If offline, desired output is effectively 0
+         if not self.online:
+              self._desired_output = 0.0
+
+    def get_actual_output(self, step_duration_hours):
+         """Calculates and returns the actual output for this step, applying ramp rate."""
+         if not self.online:
+              self._current_actual_output = 0.0 # If offline, output is 0
+              return 0.0
+
+         # Calculate maximum possible change this step
+         max_change = self.ramp_rate * step_duration_hours
+
+         # Determine the target output we're trying to reach (already set by set_desired_output)
+         target = self._desired_output
+
+         # Calculate the difference between target and current output
+         difference = target - self._current_actual_output
+
+         # Determine how much we can actually change this step, limited by ramp rate
+         change_amount = np.clip(difference, -max_change, max_change)
+
+         # Update the current actual output
+         self._current_actual_output += change_amount
+
+         # Ensure output stays within the generator's min/max limits (even while ramping)
+         # This might need careful thought - typically ramp limits apply *between* steps,
+         # but the final output must be within min/max. Let's clip here.
+         self._current_actual_output = np.clip(self._current_actual_output, self.min_output, self.max_output)
+
+         return self._current_actual_output # Return the calculated output for this step
 class EmergencyGenerator:
     """
     Represents an emergency generator with startup time and limited runtime.
@@ -260,6 +296,7 @@ class Battery:
         self._last_action_mode = 0 # 0=Idle, 1=Discharge, 2=Charge
         self._energy_drawn_this_step = 0.0 # MWh (for charge cost calculation)
         self._energy_discharged_this_step = 0.0 # MWh (for discharge cost/benefit calculation)
+        self._energy_stored_this_step = 0.0
 
     def attempt_discharge(self):
         """
@@ -275,6 +312,7 @@ class Battery:
         """
         self._last_action_mode = 1 # Record action
         self._energy_drawn_this_step = 0.0 # Reset charging energy tracker
+        self._energy_stored_this_step = 0.0 # Reset for discharge step
 
         # 1. Max power the battery *hardware* can push out (MW)
         max_battery_power_rate = self.discharge_rate
@@ -325,6 +363,7 @@ class Battery:
         """
         self._last_action_mode = 2 # Record action
         self._energy_discharged_this_step = 0.0 # Reset discharging energy tracker
+        self._energy_stored_this_step = 0.0 # Reset for charge step
 
         # 1. Max power the battery *hardware* can draw (MW)
         max_battery_draw_rate = self.charge_rate
@@ -361,6 +400,9 @@ class Battery:
         # 10. Record the energy *drawn* from the grid for cost calculation (MWh)
         self._energy_drawn_this_step = actual_draw_energy
 
+        # --- Record energy stored for charging reward ---
+        self._energy_stored_this_step = actual_stored_energy
+
         # Return the power drawn from the grid
         return actual_draw_power
 
@@ -390,6 +432,10 @@ class Battery:
             tuple: A tuple containing (energy_drawn_MWh, energy_discharged_MWh).
         """
         return self._energy_drawn_this_step, self._energy_discharged_this_step
+    
+    def get_energy_stored_this_step(self):
+        """Returns the energy (MWh) actually stored in the battery in the last step."""
+        return self._energy_stored_this_step
 
 
 class LoadZone:

@@ -354,16 +354,28 @@ class PowerGridEnv(gym.Env):
         num_online_main_gens = len(online_main_gens)
         collective_min_main = sum(gen.min_output for gen in online_main_gens) # MW
         collective_max_main = sum(gen.max_output for gen in online_main_gens) # MW
-
-        main_gen_actual_output = 0.0
+        target_collective_main_output = 0.0
+        share_per_gen = 0.0
         if num_online_main_gens > 0:
-             # Ensure output is within [collective_min, collective_max].
-             # If required is less than min, they still produce min (potential surplus).
-             # If required is more than max, they produce max.
-             main_gen_actual_output = np.clip(required_from_main_gens, collective_min_main, collective_max_main)
-             # Correction: If required is negative (surplus from EM/Batt), main gens should still produce their minimum.
-             main_gen_actual_output = max(collective_min_main, main_gen_actual_output)
+            # Determine the target collective output based on required_from_main_gens
+            # It still needs to respect the collective min/max *targets*, but the actual output
+            # will only move towards this.
+            target_collective_main_output = np.clip(required_from_main_gens, collective_min_main, collective_max_main)
+            # Ensure target is at least min if online
+            target_collective_main_output = max(collective_min_main, target_collective_main_output) # Or 0 if no main gens online?
+            
+            # Distribute this target among online main generators (Option A: Simple Equal Share)
+            share_per_gen = target_collective_main_output / num_online_main_gens
+        
+        # Tell each Main Generator its desired target output for this step.
+        # The MainGenerator's internal get_actual_output will calculate the ramped output towards this target.
+        for gen in self.main_generators: # Iterate through ALL main gens
+            gen.set_desired_output(share_per_gen) # Tell the gen its share
 
+         # (New Logic) Get the *actual* ramped output from each Main Generator for this step
+        # Call get_actual_output() which applies the ramp rate and updates the internal _current_actual_output
+        # Sum these up to get the total actual output from main gens this step.
+        main_gen_actual_output = sum(gen.get_actual_output(self.step_duration_hours) for gen in self.main_generators) # Pass step duration
 
         # 5d. Calculate total available power from *all* sources for this step
         self._total_available_power = main_gen_actual_output + emergency_gen_power + battery_discharge_power # MW
@@ -436,6 +448,12 @@ class PowerGridEnv(gym.Env):
         reward -= C_BATT_DISCHARGE * energy_discharged # Cost for discharging
         reward -= C_BATT_CHARGE * energy_drawn_for_charge # Cost for charging (drawing from grid)
 
+        # Reward based on the amount of energy *actually stored* in the battery this step.
+        # The battery object needs to track how much energy was added to SoC in attempt_charge.
+        energy_stored_this_step = self.battery.get_energy_stored_this_step() # Need to add this method to Battery class
+
+        reward += W_BATT_CHARGE * energy_stored_this_step
+
         # Costs associated with Emergency Generators
         for i, em_gen in enumerate(self.emergency_generators):
             # One-time cost for initiating boot sequence (flag set in command_boot)
@@ -487,6 +505,7 @@ class PowerGridEnv(gym.Env):
             'battery_soc_MWh': self.battery.soc,
             'battery_action_mode': a_batt_mode, # Agent's action for battery
             'energy_drawn_for_charge_MWh': energy_drawn_for_charge, # For cost calc
+            'energy_stored_this_step_MWh': energy_stored_this_step,
             'energy_discharged_MWh': energy_discharged, # For cost calc
             # Generator Details
             'main_gen_online': [gen.online for gen in self.main_generators],

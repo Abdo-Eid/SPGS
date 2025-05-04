@@ -4,7 +4,7 @@ N_EM_GENS = N_MAIN_GENS # Number of emergency generators (assumed one per main g
 
 MAIN_GEN_MIN_OUTPUT = 10 # Minimum power output (MW) when a main generator is online.
 MAIN_GEN_MAX_OUTPUT = 50 # Maximum power output (MW) a single main generator can provide.
-MAIN_GEN_FAIL_PROB_PER_HOUR = 0.03 # Probability that an online main generator fails during a 1-hour step.
+MAIN_GEN_FAIL_PROB_PER_HOUR = 0.01 # Probability that an online main generator fails during a 1-hour step.
 MAIN_GEN_HEAL_TIME_HOURS = 3 # Number of hours (steps) a main generator stays offline to heal after failing.
 
 EM_GEN_OUTPUT = 20       # Fixed power output (MW) of a single emergency generator when online.
@@ -26,6 +26,8 @@ BATTERY_DISCHARGE_EFFICIENCY = 0.9 # Efficiency factor for discharging (Energy D
 W_HI = 10.0   # Reward multiplier for successfully meeting high-priority load demand each step.
 W_LO1 = 5.0   # Reward multiplier for successfully meeting low-priority zone 1 demand each step.
 W_LO2 = 3.0   # Reward multiplier for successfully meeting low-priority zone 2 demand each step.
+W_BATT_CHARGE = 0.05 # Reward multiplier per MWh successfully stored in the battery
+
 
 # Negative Rewards / Costs (Penalties)
 C_BATT_DISCHARGE = 0.01 # Cost per MWh discharged from the battery (e.g., reflects wear or opportunity cost).

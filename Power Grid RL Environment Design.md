@@ -4,7 +4,7 @@ This document outlines the design of the Power Grid Reinforcement Learning envir
 
 ### **1. Environment Components**
 
-*   **N main generators (`N_MAIN_GENS`):** Each has min/max output, failure probability, and heal time. Output is determined by grid need between min/max when online.
+*   **N main generators (`N_MAIN_GENS`):** Each has min/max output, failure probability, and heal time. Their **output ramps** gradually over steps towards a desired level, limited by a ramp rate.
 *   **N emergency generators (`N_EM_GENS`):** Agent can command boot (takes `T_BOOT_EMERGENCY_HOURS`) or shutdown. Fixed output (`EM_GEN_OUTPUT`) when online. Limited total runtime.
 *   **1 battery:** Agent controls mode (Idle, Charge, Discharge). Has capacity, charge/discharge rates, and efficiencies. Charging adds to system demand.
 *   **1 high-priority load zone ('hi'):** Cannot be shed by agent action. Must be met if possible.
@@ -35,17 +35,25 @@ D_lo2 = demand_profile(current_time, scale=0.5) * 100
 
 ---
 
+Thanks for providing the original section! That makes it even easier to provide the exact updated text for that specific part.
+
+Here's how you should modify Section 3 based on adding the simple ramp rate for Main Generators:
+
+---
+
 ### **3. Generator Behavior**
 
 *   **Main Generators:**
-    *   Output determined by `np.clip(required_power, collective_min, collective_max)` when online.
-    *   Fail with probability `MAIN_GEN_FAIL_PROB_PER_HOUR` per step.
-    *   Offline for `MAIN_GEN_HEAL_TIME_HOURS` steps after failure.
+    *   Each main generator has a minimum (`min_output`) and maximum (`max_output`) power output limit when online.
+    *   Each main generator has a defined **`ramp_rate`** (MW/hour), which limits the maximum amount its actual output (`_current_actual_output`) can change in a single time step.
+    *   Their **actual output ramps** gradually towards a desired level determined by the system's need. The environment calculates a target collective output for all online main generators, and each online generator aims to ramp its output towards an equal share of this target, constrained by its individual ramp rate and its `min_output`/`max_output` limits.
+    *   May fail with probability `MAIN_GEN_FAIL_PROB_PER_HOUR` per step.
+    *   Goes offline and heals after `MAIN_GEN_HEAL_TIME_HOURS` steps. An offline generator produces 0 output.
 *   **Emergency Generators:**
-    *   Agent action `a_em[i]`: 0 (Idle), 1 (Boot), 2 (Shutdown).
-    *   Boot takes `T_BOOT_EMERGENCY_HOURS` steps (timer decrements).
-    *   Fixed output `EM_GEN_OUTPUT` when online.
-    *   `runtime_left_steps` decrements each step while online. Auto-shutdown when runtime reaches 0.
+    *   Controlled by agent action `a_em[i]`: 0 (Idle/NoOp), 1 (Command Boot), 2 (Command Shutdown).
+    *   Commanding 'Boot' initiates a startup sequence that takes `T_BOOT_EMERGENCY_HOURS` steps before the generator comes online.
+    *   Produces a fixed output `EM_GEN_OUTPUT` when online.
+    *   `runtime_left_steps` decrements each step while online. Automatically shuts down when runtime reaches 0.
 
 ---
 

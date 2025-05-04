@@ -94,7 +94,7 @@ This mode loads a previously trained Q-table (**`--load` flag is mandatory**) an
         ```bash
         python main.py --mode demo --load
         ```
-        *(Equivalent to: `python main.py --mode demo --load --render_mode human --demosteps 50`)*
+        *(Equivalent to: `python main.py --mode demo --load --render_mode human --demosteps 50 --render_time 2.5`)*
 
     *   **Terminal Render Demo:** Load `sarsa_q_table.pkl`, run for 24 steps, print summary each step.
         ```bash
